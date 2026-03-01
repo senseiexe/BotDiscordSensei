@@ -7,13 +7,17 @@ console.log("Token presente:", process.env.TOKEN ? "SIM (Oculto)" : "NÃO (Vazio
 console.log("ID da Categoria:", process.env.CATEGORY_ID || "NÃO DEFINIDO");
 console.log("==============================");
 
+const { Client, GatewayIntentBits, Partials } = require('discord.js');
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
-    ]
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences
+    ],
+    partials: [Partials.Channel, Partials.Message, Partials.User]
 });
 
 // O resto do seu código continua aqui...
