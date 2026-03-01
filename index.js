@@ -1,13 +1,11 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ChannelType } = require('discord.js');
 const http = require('http');
 
-// LOG DE DIAGNÓSTICO
-console.log("=== SISTEMA DE DIAGNÓSTICO ===");
-console.log("Token presente:", process.env.TOKEN ? "SIM (Oculto)" : "NÃO (Vazio)");
-console.log("ID da Categoria:", process.env.CATEGORY_ID || "NÃO DEFINIDO");
-console.log("==============================");
-
-const { Client, GatewayIntentBits, Partials } = require('discord.js');
+// Servidor para a Render
+http.createServer((req, res) => {
+    res.write("Bot Online!");
+    res.end();
+}).listen(process.env.PORT || 3000);
 
 const client = new Client({
     intents: [
@@ -20,31 +18,20 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.User]
 });
 
-// O resto do seu código continua aqui...
-
-require('dotenv').config();
-
-// Contador simples (reseta se o bot reiniciar)
+// Contador de tickets (reseta ao reiniciar)
 let ticketCount = 1;
 
-// Servidor básico para a Render
-http.createServer((req, res) => {
-    res.write("Bot Online!");
-    res.end();
-}).listen(process.env.PORT || 3000);
-
 client.once('ready', () => {
-    console.log(`✅ Bot logado como ${client.user.tag}`);
+    console.log(`✅ SUCESSO! Logado como ${client.user.tag}`);
 });
 
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
-    // Comando /setup
     if (interaction.commandName === 'setup') {
         const embed = new EmbedBuilder()
             .setTitle('Central de Suporte')
-            .setDescription('Clique no botão abaixo para abrir um ticket de atendimento.')
+            .setDescription('Clique abaixo para abrir um ticket.')
             .setColor('#2b2d31');
 
         const button = new ActionRowBuilder().addComponents(
@@ -58,52 +45,43 @@ client.on('interactionCreate', async interaction => {
         await interaction.reply({ embeds: [embed], components: [button] });
     }
 
-    // Lógica do Botão Abrir Ticket
     if (interaction.customId === 'abrir_ticket') {
-        const guild = interaction.guild;
-        const user = interaction.user;
-        const protocol = ticketCount++;
+        try {
+            const protocol = ticketCount++;
+            const channel = await interaction.guild.channels.create({
+                name: `ticket-${interaction.user.username}-${protocol}`,
+                type: ChannelType.GuildText,
+                parent: process.env.CATEGORY_ID,
+                permissionOverwrites: [
+                    { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
+                ]
+            });
 
-        const channel = await guild.channels.create({
-            name: `ticket-${user.username}-${protocol}`,
-            type: ChannelType.GuildText,
-            parent: process.env.CATEGORY_ID,
-            permissionOverwrites: [
-                { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-                { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
-            ]
-        });
+            await interaction.reply({ content: `Ticket criado: ${channel}`, ephemeral: true });
 
-        await interaction.reply({ content: `Ticket criado: ${channel}`, ephemeral: true });
+            const ticketEmbed = new EmbedBuilder()
+                .setTitle(`Ticket #${protocol}`)
+                .setDescription(`Olá ${interaction.user}, aguarde um moderador.`)
+                .setColor('#00ff00');
 
-        const ticketEmbed = new EmbedBuilder()
-            .setTitle(`Ticket #${protocol}`)
-            .setDescription(`Olá ${user}, aguarde um moderador.`)
-            .setColor('#00ff00');
+            const closeButton = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('fechar_ticket')
+                    .setLabel('Fechar Ticket')
+                    .setStyle(ButtonStyle.Danger)
+            );
 
-        const closeButton = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('fechar_ticket')
-                .setLabel('Fechar Ticket')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-        await channel.send({ embeds: [ticketEmbed], components: [closeButton] });
+            await channel.send({ embeds: [ticketEmbed], components: [closeButton] });
+        } catch (e) {
+            console.error("Erro ao criar canal:", e);
+        }
     }
 
-    // Lógica do Botão Fechar Ticket
     if (interaction.customId === 'fechar_ticket') {
-        await interaction.reply('Este ticket será fechado em 5 segundos...');
-        setTimeout(() => interaction.channel.delete(), 5000);
+        await interaction.reply('Fechando em 5 segundos...');
+        setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
     }
-});
-
-client.once('ready', () => {
-    console.log(`✅ Sucesso! Logado como ${client.user.tag}`);
-});
-
-process.on('unhandledRejection', error => {
-    console.error('❌ Erro não tratado:', error);
 });
 
 client.login(process.env.TOKEN);
