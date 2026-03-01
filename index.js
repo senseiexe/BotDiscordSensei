@@ -84,4 +84,11 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-client.login(process.env.TOKEN);
+// Substitua o final do seu arquivo por isso:
+console.log("Tentando login...");
+
+client.login(process.env.TOKEN).then(() => {
+    console.log("🚀 CONEXÃO ESTABELECIDA COM O DISCORD!");
+}).catch((err) => {
+    console.error("❌ FALHA CRÍTICA NO LOGIN:", err.message);
+});
