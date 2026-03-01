@@ -1,6 +1,11 @@
-const { Client, GatewayIntentBits, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const http = require('http');
-require('dotenv').config();
+
+// LOG DE DIAGNÓSTICO
+console.log("=== SISTEMA DE DIAGNÓSTICO ===");
+console.log("Token presente:", process.env.TOKEN ? "SIM (Oculto)" : "NÃO (Vazio)");
+console.log("ID da Categoria:", process.env.CATEGORY_ID || "NÃO DEFINIDO");
+console.log("==============================");
 
 const client = new Client({
     intents: [
@@ -10,6 +15,10 @@ const client = new Client({
         GatewayIntentBits.GuildMembers
     ]
 });
+
+// O resto do seu código continua aqui...
+
+require('dotenv').config();
 
 // Contador simples (reseta se o bot reiniciar)
 let ticketCount = 1;
