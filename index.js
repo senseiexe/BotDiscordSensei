@@ -85,4 +85,12 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+client.once('ready', () => {
+    console.log(`✅ Sucesso! Logado como ${client.user.tag}`);
+});
+
+process.on('unhandledRejection', error => {
+    console.error('❌ Erro não tratado:', error);
+});
+
 client.login(process.env.TOKEN);
