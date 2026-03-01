@@ -145,4 +145,12 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
+const http = require('http');
+
+// Cria um servidor básico para a Render não dar erro de porta
+http.createServer((req, res) => {
+    res.write("Bot Online!");
+    res.end();
+}).listen(process.env.PORT || 3000);
+
 client.login(process.env.TOKEN);
