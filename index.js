@@ -1,26 +1,14 @@
-const { 
-    Client, 
-    GatewayIntentBits, 
-    Partials, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
-    EmbedBuilder, 
-    ChannelType, 
-    PermissionsBitField, 
-    StringSelectMenuBuilder,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle
-} = require('discord.js');
+const { Client, GatewayIntentBits, Partials, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ChannelType } = require('discord.js');
+const http = require('http');
 
-const discordTranscripts = require('discord-html-transcripts');
+// --- MANTER KOYEB ONLINE ---
+const PORT = process.env.PORT || 8000;
+http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Bot Gerente Online!');
+}).listen(PORT, '0.0.0.0');
 
-// CONFIGURAÇÕES BÁSICAS (Preencha com seus dados)
-const TOKEN = 'SEU_TOKEN_AQUI';
-const CATEGORY_ID = 'ID_DA_CATEGORIA_DE_TICKETS'; // ID da categoria onde os tickets serão criados
-const LOG_CHANNEL_ID = 'ID_DO_CANAL_DE_LOGS'; // (Opcional) ID do canal onde os transcripts serão salvos
-
+// --- CONFIGURAÇÃO DO BOT ---
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -28,171 +16,178 @@ const client = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers
     ],
-    partials: [Partials.Message, Partials.Channel, Partials.Reaction]
+    partials: [Partials.Channel, Partials.Message, Partials.User]
 });
+
+let ticketCount = 1;
 
 client.once('ready', () => {
-    console.log(`✅ Bot online como ${client.user.tag}`);
+    console.log(`🚀 SUCESSO! Logado como ${client.user.tag}`);
+    
+    // Lista de todos os Comandos
+    const commands = [
+        { name: 'setup', description: 'Envia a mensagem de tickets' },
+        { 
+            name: 'say', 
+            description: 'Fale se passando pelo bot',
+            options: [{ name: 'mensagem', type: 3, description: 'O que o bot deve dizer', required: true }]
+        },
+        { 
+            name: 'enquete', 
+            description: 'Cria uma enquete com reações',
+            options: [{ name: 'pergunta', type: 3, description: 'A pergunta da enquete', required: true }]
+        },
+        { 
+            name: 'limpar', 
+            description: 'Apaga várias mensagens do chat de uma vez',
+            options: [{ name: 'quantidade', type: 4, description: 'Quantas mensagens (1 a 100)', required: true }]
+        },
+        { 
+            name: 'banir', 
+            description: 'Bane um usuário do servidor',
+            options: [{ name: 'usuario', type: 6, description: 'Usuário a ser banido', required: true }, { name: 'motivo', type: 3, description: 'Motivo do banimento', required: false }]
+        },
+        { name: 'verificacao', description: 'Cria o botão de verificação de membros' }
+    ];
+    
+    client.application.commands.set(commands);
 });
 
-// Comando simples "!setup" para criar o painel principal de tickets
-client.on('messageCreate', async (message) => {
-    if (message.content === '!setup' && message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        const embed = new EmbedBuilder()
-            .setTitle('🎫 Central de Atendimento')
-            .setDescription('Clique no botão abaixo para abrir um ticket de suporte. Nossa equipe o atenderá em breve.')
-            .setColor('#2b2d31');
+client.on('interactionCreate', async interaction => {
+    // ==========================================
+    // COMANDOS DE BARRA (CHAT INPUT)
+    // ==========================================
+    if (interaction.isChatInputCommand()) {
 
-        const button = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('open_ticket')
-                .setLabel('Abrir Ticket')
-                .setEmoji('📩')
-                .setStyle(ButtonStyle.Primary)
-        );
-
-        await message.channel.send({ embeds: [embed], components: [button] });
-        await message.delete();
-    }
-});
-
-// Gerenciamento de Interações (Botões, Menus e Modais)
-client.on('interactionCreate', async (interaction) => {
-    // --- 1. ABRIR TICKET ---
-    if (interaction.isButton() && interaction.customId === 'open_ticket') {
-        const channelName = `ticket-${interaction.user.username}`;
-        
-        // Verifica se o usuário já tem um ticket aberto
-        const existingChannel = interaction.guild.channels.cache.find(c => c.name === channelName.toLowerCase());
-        if (existingChannel) {
-            return interaction.reply({ content: `Você já possui um ticket aberto em ${existingChannel}.`, ephemeral: true });
-        }
-
-        // Criação do canal privado
-        const ticketChannel = await interaction.guild.channels.create({
-            name: channelName,
-            type: ChannelType.GuildText,
-            parent: CATEGORY_ID,
-            permissionOverwrites: [
-                {
-                    id: interaction.guild.id,
-                    deny: [PermissionsBitField.Flags.ViewChannel], // Esconde de todos
-                },
-                {
-                    id: interaction.user.id,
-                    allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles], // Permite o usuário
-                },
-                {
-                    id: client.user.id,
-                    allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageChannels], // Permite o bot
-                }
-            ]
-        });
-
-        await interaction.reply({ content: `✅ Seu ticket foi criado: ${ticketChannel}`, ephemeral: true });
-
-        // Embed de boas-vindas e Aviso LGPD
-        const ticketEmbed = new EmbedBuilder()
-            .setTitle('Bem-vindo ao seu Ticket')
-            .setDescription(`Olá ${interaction.user}, descreva seu problema e aguarde a equipe.\n\n` +
-                            `⚠️ **Aviso de Privacidade (LGPD):**\n` +
-                            `Para fins de segurança e qualidade, todas as mensagens enviadas neste canal serão salvas em um histórico fechado ao término do atendimento. Os dados são acessíveis apenas pela administração e tratados conforme a Lei Geral de Proteção de Dados (LGPD).`)
-            .setColor('#2ecc71');
-
-        // Painel de Gerenciamento do Ticket (Menu)
-        const manageMenu = new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId('manage_ticket')
-                .setPlaceholder('⚙️ Gerenciar Ticket')
-                .addOptions([
-                    { label: 'Adicionar Membro', description: 'Adiciona um usuário ao ticket', value: 'add_user', emoji: '👤' },
-                    { label: 'Remover Membro', description: 'Remove um usuário do ticket', value: 'remove_user', emoji: '🚫' },
-                    { label: 'Fechar e Salvar Ticket', description: 'Encerra o ticket e gera o histórico (LGPD)', value: 'close_ticket', emoji: '🔒' }
-                ])
-        );
-
-        await ticketChannel.send({ content: `${interaction.user}`, embeds: [ticketEmbed], components: [manageMenu] });
-    }
-
-    // --- 2. PAINEL DE GERENCIAMENTO (Menu de Seleção) ---
-    if (interaction.isStringSelectMenu() && interaction.customId === 'manage_ticket') {
-        const value = interaction.values[0];
-
-        // Fechar Ticket e Gerar Transcript
-        if (value === 'close_ticket') {
-            await interaction.reply({ content: '🔒 Salvando o histórico de mensagens e fechando o ticket...' });
-
-            // Gera o transcript (HTML)
-            const attachment = await discordTranscripts.createTranscript(interaction.channel, {
-                limit: -1, 
-                returnType: 'attachment', 
-                filename: `${interaction.channel.name}-historico.html`, 
-                saveImages: true,
-                poweredBy: false
-            });
-
-            // Envia o transcript para o usuário no privado (se possível)
-            try {
-                await interaction.user.send({ 
-                    content: `Seu ticket **${interaction.channel.name}** foi encerrado. Segue em anexo o histórico das mensagens (conforme aviso LGPD).`,
-                    files: [attachment] 
-                });
-            } catch (err) {
-                console.log('Não foi possível enviar DM para o usuário.');
-            }
-
-            // Envia para o canal de logs do servidor (se configurado)
-            if (LOG_CHANNEL_ID) {
-                const logChannel = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
-                if (logChannel) {
-                    await logChannel.send({ 
-                        content: `Histórico do \`${interaction.channel.name}\` encerrado por ${interaction.user.tag}.`,
-                        files: [attachment] 
-                    });
-                }
-            }
-
-            // Deleta o canal
-            setTimeout(() => interaction.channel.delete(), 5000);
-        }
-
-        // Adicionar Membro (Abre um Modal)
-        if (value === 'add_user' || value === 'remove_user') {
-            const isAdd = value === 'add_user';
-            const modal = new ModalBuilder()
-                .setCustomId(isAdd ? 'modal_add_user' : 'modal_remove_user')
-                .setTitle(isAdd ? 'Adicionar Usuário' : 'Remover Usuário');
-
-            const userIdInput = new TextInputBuilder()
-                .setCustomId('userIdInput')
-                .setLabel('Insira o ID do Usuário do Discord')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true);
-
-            modal.addComponents(new ActionRowBuilder().addComponents(userIdInput));
-            await interaction.showModal(modal);
-        }
-    }
-
-    // --- 3. RECEBENDO DADOS DO MODAL (Adicionar/Remover) ---
-    if (interaction.isModalSubmit()) {
-        const userId = interaction.fields.getTextInputValue('userIdInput');
-        
-        try {
-            const user = await interaction.guild.members.fetch(userId);
-
-            if (interaction.customId === 'modal_add_user') {
-                await interaction.channel.permissionOverwrites.edit(userId, { ViewChannel: true, SendMessages: true });
-                await interaction.reply({ content: `✅ Usuário ${user} foi **adicionado** ao ticket.`, ephemeral: false });
-            } 
+        // --- SETUP DE TICKETS ---
+        if (interaction.commandName === 'setup') {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: '❌ Sem permissão.', ephemeral: true });
             
-            if (interaction.customId === 'modal_remove_user') {
-                await interaction.channel.permissionOverwrites.edit(userId, { ViewChannel: false, SendMessages: false });
-                await interaction.reply({ content: `✅ Usuário ${user.user.username} foi **removido** do ticket.`, ephemeral: false });
+            const embed = new EmbedBuilder()
+                .setTitle('🎫 Central de Atendimento')
+                .setDescription('Clique abaixo para abrir um ticket privado com a nossa equipe.')
+                .setColor('#5865F2');
+            const button = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('abrir_ticket').setLabel('Abrir Ticket').setEmoji('📩').setStyle(ButtonStyle.Primary));
+            await interaction.reply({ embeds: [embed], components: [button] });
+        }
+
+        // --- SISTEMA DE VERIFICAÇÃO ---
+        if (interaction.commandName === 'verificacao') {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: '❌ Sem permissão.', ephemeral: true });
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🛡️ Verificação de Segurança')
+                .setDescription('Para ter acesso aos canais do servidor, clique no botão abaixo para provar que você é humano.')
+                .setColor('#2ecc71');
+            const button = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('btn_verificar').setLabel('Me Verificar').setEmoji('✅').setStyle(ButtonStyle.Success));
+            await interaction.reply({ embeds: [embed], components: [button] });
+        }
+
+        // --- COMANDO SAY ---
+        if (interaction.commandName === 'say') {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: '❌ Sem permissão.', ephemeral: true });
+            const mensagem = interaction.options.getString('mensagem');
+            await interaction.channel.send(mensagem);
+            await interaction.reply({ content: '✅ Mensagem enviada!', ephemeral: true });
+        }
+
+        // --- CRIAR ENQUETE ---
+        if (interaction.commandName === 'enquete') {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) return interaction.reply({ content: '❌ Sem permissão.', ephemeral: true });
+            const pergunta = interaction.options.getString('pergunta');
+            
+            const embed = new EmbedBuilder()
+                .setTitle('📊 Nova Enquete!')
+                .setDescription(`**${pergunta}**`)
+                .setColor('#f1c40f')
+                .setFooter({ text: `Enquete criada por ${interaction.user.username}` });
+
+            const message = await interaction.reply({ embeds: [embed], fetchReply: true });
+            await message.react('👍');
+            await message.react('👎');
+        }
+
+        // --- LIMPAR CHAT ---
+        if (interaction.commandName === 'limpar') {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) return interaction.reply({ content: '❌ Sem permissão.', ephemeral: true });
+            
+            const quantidade = interaction.options.getInteger('quantidade');
+            if (quantidade < 1 || quantidade > 100) return interaction.reply({ content: '⚠️ Escolha um número entre 1 e 100.', ephemeral: true });
+
+            await interaction.channel.bulkDelete(quantidade, true).catch(err => {
+                return interaction.reply({ content: '❌ Erro: Não posso apagar mensagens com mais de 14 dias.', ephemeral: true });
+            });
+            await interaction.reply({ content: `🧹 \`${quantidade}\` mensagens foram apagadas por ${interaction.user}!`, ephemeral: true }).then(msg => {
+                setTimeout(() => msg.delete().catch(() => {}), 4000);
+            });
+        }
+
+        // --- BANIR USUÁRIO ---
+        if (interaction.commandName === 'banir') {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) return interaction.reply({ content: '❌ Sem permissão.', ephemeral: true });
+            
+            const alvo = interaction.options.getUser('usuario');
+            const motivo = interaction.options.getString('motivo') || 'Nenhum motivo fornecido';
+            const membro = interaction.guild.members.cache.get(alvo.id);
+
+            if (!membro) return interaction.reply({ content: '❌ Usuário não encontrado no servidor.', ephemeral: true });
+            if (!membro.bannable) return interaction.reply({ content: '❌ Não tenho permissão para banir essa pessoa (cargo dela é maior que o meu).', ephemeral: true });
+
+            await membro.ban({ reason: motivo });
+            await interaction.reply({ content: `🔨 **${alvo.tag}** foi banido com sucesso!\n**Motivo:** ${motivo}` });
+        }
+    }
+
+    // ==========================================
+    // INTERAÇÕES DE BOTÕES
+    // ==========================================
+    if (interaction.isButton()) {
+        
+        // --- BOTÃO: VERIFICAR MEMBRO ---
+        if (interaction.customId === 'btn_verificar') {
+            const roleId = process.env.ROLE_ID; // Pegamos o ID do cargo lá da Koyeb
+            const role = interaction.guild.roles.cache.get(roleId);
+            
+            if (!role) return interaction.reply({ content: '❌ O sistema de verificação não está configurado corretamente (Cargo não encontrado).', ephemeral: true });
+            
+            if (interaction.member.roles.cache.has(roleId)) {
+                return interaction.reply({ content: '⚠️ Você já está verificado!', ephemeral: true });
             }
 
-        } catch (error) {
-            await interaction.reply({ content: `❌ Não foi possível encontrar um usuário com o ID \`${userId}\` no servidor.`, ephemeral: true });
+            try {
+                await interaction.member.roles.add(role);
+                await interaction.reply({ content: '✅ Verificação concluída! Bem-vindo(a) ao servidor.', ephemeral: true });
+            } catch (error) {
+                console.error(error);
+                await interaction.reply({ content: '❌ Erro ao te dar o cargo. Meu cargo de Bot precisa estar ACIMA do cargo de verificado nas configurações do servidor.', ephemeral: true });
+            }
+        }
+
+        // --- BOTÕES DE TICKET (Inalterados) ---
+        if (interaction.customId === 'abrir_ticket') {
+            const protocol = ticketCount++;
+            try {
+                const channel = await interaction.guild.channels.create({
+                    name: `ticket-${interaction.user.username}-${protocol}`,
+                    type: ChannelType.GuildText,
+                    parent: process.env.CATEGORY_ID,
+                    permissionOverwrites: [
+                        { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                        { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
+                    ],
+                });
+                await interaction.reply({ content: `✅ Ticket criado: ${channel}`, ephemeral: true });
+                
+                const closeBtn = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('fechar_ticket').setLabel('Fechar Ticket').setStyle(ButtonStyle.Danger)
+                );
+                await channel.send({ content: `Olá ${interaction.user}, como podemos ajudar?`, components: [closeBtn] });
+            } catch (e) { console.error(e); }
+        }
+
+        if (interaction.customId === 'fechar_ticket') {
+            await interaction.reply('🔒 Encerrando em 5 segundos...');
+            setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
         }
     }
 });
