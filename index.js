@@ -84,11 +84,17 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Substitua o final do seu arquivo por isso:
-console.log("Tentando login...");
+// 1. Abre o servidor primeiro para a Render liberar a rede
+const server = http.createServer((req, res) => {
+    res.write("Bot Online!");
+    res.end();
+});
 
-client.login(process.env.TOKEN).then(() => {
-    console.log("🚀 CONEXÃO ESTABELECIDA COM O DISCORD!");
-}).catch((err) => {
-    console.error("❌ FALHA CRÍTICA NO LOGIN:", err.message);
+server.listen(process.env.PORT || 3000, () => {
+    console.log("⚓ Porta liberada pela Render. Iniciando login no Discord...");
+    
+    // 2. Tenta o login APÓS a porta estar aberta
+    client.login(process.env.TOKEN)
+        .then(() => console.log("🚀 CONEXÃO ESTABELECIDA!"))
+        .catch(err => console.error("❌ ERRO NO LOGIN:", err.message));
 });
